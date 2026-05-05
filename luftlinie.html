@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0a0a0a" id="meta-theme-color">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Luftlinie</title>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap');
+
+        :root {
+            --bg: #0a0a0a;
+            --surface: #141414;
+            --border: #222;
+            --text: #f0f0f0;
+            --text-muted: #666;
+            --accent: #e8ff5a;
+            --danger: #ff5a5a;
+            --arrow-tip: #e8ff5a;
+            --arrow-shaft: rgba(58, 58, 26, 0.5);
+            --ring-color: rgba(232, 255, 90, 0.15);
+        }
+
+        :root.light-mode {
+            --bg: #f5f5f0;
+            --surface: #ffffff;
+            --border: #e0e0d8;
+            --text: #111;
+            --text-muted: #888;
+            --accent: #1a1a1a;
+            --danger: #cc2200;
+            --arrow-tip: #1a1a1a;
+            --arrow-shaft: rgba(170, 170, 170, 0.5);
+            --ring-color: rgba(26, 26, 26, 0.08);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'DM Mono', monospace;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        h1, h2, .syne { font-family: 'Syne', sans-serif; }
+
+        /* Screens */
+        #search-screen, #nav-screen, #gps-error-screen {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0; left: 0;
+        }
+
+        #nav-screen { display: none; align-items: center; justify-content: center; overflow: hidden; }
+        #gps-error-screen { display: none; align-items: center; justify-content: center; padding: 30px; text-align: center; }
+
+        /* Search Screen */
+        #search-screen { padding: 20px; overflow-y: auto; }
+
+        .header { text-align: center; margin: 40px 0 30px; font-size: 2rem; }
+        .header .light { font-weight: 400; color: var(--text); }
+        .header .bold { font-weight: 800; color: var(--accent); }
+
+        .search-box { display: flex; gap: 10px; margin-bottom: 10px; }
+        input[type="text"] {
+            flex: 1;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 14px;
+            border-radius: 14px;
+            font-family: 'DM Mono', monospace;
+            font-size: 16px;
+            outline: none;
+        }
+        input[type="text"]:focus { border-color: var(--accent); }
+
+        button {
+            background: var(--surface);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 14px 20px;
+            font-family: 'DM Mono', monospace;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button.primary { background: var(--accent); color: #000; border: none; font-weight: bold; }
+        button.primary:active { opacity: 0.8; }
+
+        #status-bar { font-size: 12px; color: var(--danger); min-height: 18px; margin-bottom: 20px; word-break: break-all; }
+
+        .list-container { display: flex; flex-direction: column; gap: 10px; margin-bottom: 30px; }
+        .list-item {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 14px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+        }
+        .list-item:active { opacity: 0.7; }
+        .list-item .info { flex: 1; overflow: hidden; }
+        .list-item .name { font-weight: 500; font-size: 16px; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .list-item .address { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .delete-btn { background: transparent; border: none; color: var(--text-muted); font-size: 18px; padding: 10px; margin-left: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+        /* Nav Screen */
+        .gps-status {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-muted);
+            z-index: 10;
+        }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+        .dot.active { background: #4caf50; animation: blink 2s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        .target-label {
+            position: absolute;
+            top: 60px;
+            font-size: 1.2rem;
+            text-align: center;
+            width: 80%;
+            z-index: 10;
+        }
+
+        .compass-container {
+            position: relative;
+            width: 250px;
+            height: 250px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .ring {
+            position: absolute;
+            border-radius: 50%;
+            border: 2px solid var(--ring-color);
+            animation: pulse 3s infinite linear;
+            opacity: 0;
+        }
+        .ring:nth-child(1) { width: 100%; height: 100%; animation-delay: 0s; }
+        .ring:nth-child(2) { width: 100%; height: 100%; animation-delay: 1s; }
+        .ring:nth-child(3) { width: 100%; height: 100%; animation-delay: 2s; }
+        @keyframes pulse {
+            0% { transform: scale(0.6); opacity: 1; border-width: 3px; }
+            100% { transform: scale(1.6); opacity: 0; border-width: 1px; }
+        }
+
+        .compass-ring {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            border: 2px solid var(--border);
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding-top: 10px;
+        }
+        .compass-ring::before { content: 'N'; font-weight: bold; color: var(--text-muted); font-size: 14px; }
+
+        #arrow-svg {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1);
+            transform-origin: center center;
+        }
+
+        .distance-display {
+            position: absolute;
+            bottom: 120px;
+            text-align: center;
+            z-index: 10;
+        }
+        .dist-value { font-size: 4rem; margin-bottom: -5px; }
+        .dist-unit { font-size: 1.2rem; color: var(--text-muted); }
+
+        #target-reached {
+            position: absolute;
+            bottom: 220px;
+            background: var(--accent);
+            color: #000;
+            padding: 8px 16px;
+            border-radius: 14px;
+            font-weight: bold;
+            font-size: 14px;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.3s;
+            pointer-events: none;
+        }
+        #target-reached.visible { opacity: 1; transform: translateY(0); }
+
+        /* GPS Error Screen */
+        .error-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 32px 24px;
+            max-width: 340px;
+            width: 100%;
+        }
+        .error-icon { font-size: 3rem; margin-bottom: 16px; }
+        .error-card h2 { font-family: 'Syne', sans-serif; font-size: 1.4rem; margin-bottom: 12px; }
+        .error-card p { font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 20px; }
+        .error-card .hint {
+            background: var(--bg);
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+            text-align: left;
+            line-height: 1.7;
+        }
+        .error-card .hint strong { color: var(--text); }
+        .error-actions { display: flex; flex-direction: column; gap: 10px; }
+        #retry-gps-btn { width: 100%; }
+        #back-to-search-btn { width: 100%; background: transparent; color: var(--text-muted); border-color: var(--border); }
+
+        /* Menu & Modal */
+        #menu-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            font-size: 24px;
+            color: var(--text);
+        }
+
+        #menu-panel {
+            position: fixed;
+            bottom: 100px;
+            right: 30px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            z-index: 99;
+            transform-origin: bottom right;
+            transform: translateY(20px) scale(0.9);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        #menu-panel.open { transform: translateY(0) scale(1); opacity: 1; pointer-events: auto; }
+        #menu-panel button { border: none; background: transparent; text-align: right; padding: 12px 20px; border-radius: 8px; font-size: 14px; }
+        #menu-panel button:active { background: var(--border); }
+
+        #save-modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 200;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        #save-modal {
+            background: var(--surface);
+            padding: 24px;
+            border-radius: 14px;
+            width: 80%;
+            max-width: 350px;
+            border: 1px solid var(--border);
+        }
+        #save-modal h3 { margin-bottom: 15px; font-family: 'Syne'; }
+        #save-modal input { width: 100%; margin-bottom: 15px; }
+        .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+        .modal-actions button { padding: 10px 16px; border-radius: 8px; }
+
+        .icon-star { color: var(--accent); margin-right: 10px; font-size: 18px; }
+
+        /* GPS loading overlay on nav screen */
+        #gps-loading {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--bg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            z-index: 20;
+            transition: opacity 0.4s;
+        }
+        #gps-loading.hidden { opacity: 0; pointer-events: none; }
+        #gps-loading p { color: var(--text-muted); font-size: 14px; }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <!-- SUCHE -->
+    <div id="search-screen">
+        <h1 class="header syne"><span class="light">luft</span><span class="bold">linie</span></h1>
+
+        <div class="search-box">
+            <input type="text" id="search-input" placeholder="Zielort eingeben..." autocomplete="off">
+            <button class="primary" id="search-btn">🔍</button>
+        </div>
+        <div id="status-bar"></div>
+
+        <div id="results-list" class="list-container"></div>
+
+        <h2 class="syne" style="font-size: 14px; margin-bottom: 10px; color: var(--text-muted); display: none;" id="saved-title">Gespeicherte Orte</h2>
+        <div id="saved-list" class="list-container"></div>
+    </div>
+
+    <!-- NAVIGATION -->
+    <div id="nav-screen">
+        <!-- GPS-Ladescreen -->
+        <div id="gps-loading">
+            <div class="spinner"></div>
+            <p>GPS wird ermittelt…</p>
+        </div>
+
+        <div class="gps-status">
+            <div class="dot" id="gps-dot"></div>
+            <span id="gps-text">Warte auf GPS...</span>
+        </div>
+
+        <h2 class="syne target-label" id="nav-target-name">Ziel</h2>
+
+        <div class="compass-container">
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="compass-ring"></div>
+            <svg id="arrow-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <path d="M 50 10 L 80 80 L 50 65 L 20 80 Z" fill="var(--arrow-tip)" />
+                <rect x="47" y="65" width="6" height="25" fill="var(--arrow-shaft)" rx="3" />
+            </svg>
+        </div>
+
+        <div id="target-reached" class="syne">Ziel erreicht! ✓</div>
+
+        <div class="distance-display">
+            <div class="syne dist-value" id="dist-value">--</div>
+            <div class="dist-unit" id="dist-unit">km</div>
+        </div>
+    </div>
+
+    <!-- GPS FEHLER -->
+    <div id="gps-error-screen">
+        <div class="error-card">
+            <div class="error-icon">📍</div>
+            <h2>GPS-Zugriff nötig</h2>
+            <p id="gps-error-msg">Die App benötigt deinen Standort, um die Richtung zum Ziel zu berechnen.</p>
+            <div class="hint" id="gps-error-hint">
+                <strong>So aktivierst du den Standort:</strong><br>
+                • <strong>iOS Safari:</strong> Einstellungen → Safari → Standort<br>
+                • <strong>Android Chrome:</strong> Einstellungen → Website-Einstellungen → Standort<br>
+                • Oder das 🔒-Symbol in der Adressleiste antippen
+            </div>
+            <div class="error-actions">
+                <button class="primary" id="retry-gps-btn">Nochmal versuchen</button>
+                <button id="back-to-search-btn">← Zurück zur Suche</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MENÜ -->
+    <button id="menu-btn">☰</button>
+    <div id="menu-panel">
+        <button id="menu-new-search">Neue Suche</button>
+        <button id="menu-save-target" style="display: none;">Ziel speichern ★</button>
+        <button id="menu-toggle-theme">Light/Dark Mode</button>
+    </div>
+
+    <!-- SAVE MODAL -->
+    <div id="save-modal-overlay">
+        <div id="save-modal">
+            <h3>Ort speichern</h3>
+            <input type="text" id="save-name-input" placeholder="Name">
+            <div class="modal-actions">
+                <button id="save-cancel">Abbrechen</button>
+                <button class="primary" id="save-confirm">Speichern</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ─── STATE ────────────────────────────────────────────────────────────────
+        const state = {
+            target: null,          // { name, lat, lon }
+            currentLoc: null,      // { lat, lon }
+            heading: 0,
+            watchId: null,
+            lastRenderedRotation: 0
+        };
+
+        const escHtml = (s) => (s || '').toString()
+            .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+
+        // ─── DOM ──────────────────────────────────────────────────────────────────
+        const screens = {
+            search:   document.getElementById('search-screen'),
+            nav:      document.getElementById('nav-screen'),
+            gpsError: document.getElementById('gps-error-screen')
+        };
+        const ui = {
+            searchInput:    document.getElementById('search-input'),
+            searchBtn:      document.getElementById('search-btn'),
+            statusBar:      document.getElementById('status-bar'),
+            resultsList:    document.getElementById('results-list'),
+            savedList:      document.getElementById('saved-list'),
+            savedTitle:     document.getElementById('saved-title'),
+            navTargetName:  document.getElementById('nav-target-name'),
+            gpsDot:         document.getElementById('gps-dot'),
+            gpsText:        document.getElementById('gps-text'),
+            arrow:          document.getElementById('arrow-svg'),
+            distValue:      document.getElementById('dist-value'),
+            distUnit:       document.getElementById('dist-unit'),
+            targetReached:  document.getElementById('target-reached'),
+            menuBtn:        document.getElementById('menu-btn'),
+            menuPanel:      document.getElementById('menu-panel'),
+            menuNewSearch:  document.getElementById('menu-new-search'),
+            menuSaveTarget: document.getElementById('menu-save-target'),
+            menuToggleTheme:document.getElementById('menu-toggle-theme'),
+            modalOverlay:   document.getElementById('save-modal-overlay'),
+            saveNameInput:  document.getElementById('save-name-input'),
+            saveCancel:     document.getElementById('save-cancel'),
+            saveConfirm:    document.getElementById('save-confirm'),
+            gpsLoading:     document.getElementById('gps-loading'),
+            gpsErrorMsg:    document.getElementById('gps-error-msg'),
+            gpsErrorHint:   document.getElementById('gps-error-hint'),
+            retryGpsBtn:    document.getElementById('retry-gps-btn'),
+            backToSearch:   document.getElementById('back-to-search-btn'),
+        };
+
+        // ─── SCREEN MANAGEMENT ────────────────────────────────────────────────────
+        function showScreen(name) {
+            Object.entries(screens).forEach(([k, el]) => {
+                el.style.display = (k === name) ? 'flex' : 'none';
+            });
+            // Menu-Btn nur auf Nav & Error ausblenden wenn gewünscht
+            ui.menuBtn.style.display = (name === 'gpsError') ? 'none' : 'flex';
+        }
+
+        // ─── MATH ─────────────────────────────────────────────────────────────────
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2)**2 +
+                      Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        function getBearing(lat1, lon1, lat2, lon2) {
+            const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
+            const Δλ = (lon2 - lon1) * Math.PI / 180;
+            const y = Math.sin(Δλ) * Math.cos(φ2);
+            const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);
+            return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+        }
+
+        // ─── THEME ────────────────────────────────────────────────────────────────
+        function applyTheme(theme) {
+            document.documentElement.classList.toggle('light-mode', theme === 'light');
+            document.getElementById('meta-theme-color').content = theme === 'light' ? '#f5f5f0' : '#0a0a0a';
+            try { localStorage.setItem('theme', theme); } catch(e) {}
+        }
+        let savedTheme = 'dark';
+        try { savedTheme = localStorage.getItem('theme') || 'dark'; } catch(e) {}
+        applyTheme(savedTheme);
+
+        // ─── SAVED PLACES ─────────────────────────────────────────────────────────
+        function loadSavedPlaces() {
+            try { return JSON.parse(localStorage.getItem('savedPlaces')) || []; } catch(e) { return []; }
+        }
+
+        function renderSavedPlaces() {
+            const places = loadSavedPlaces();
+            ui.savedList.innerHTML = '';
+            ui.savedTitle.style.display = places.length ? 'block' : 'none';
+            places.forEach(p => {
+                const div = document.createElement('div');
+                div.className = 'list-item';
+                div.innerHTML = `
+                    <span class="icon-star">★</span>
+                    <div class="info"><div class="name">${escHtml(p.name)}</div></div>
+                    <button class="delete-btn" aria-label="Löschen">✕</button>`;
+                div.querySelector('.info').onclick = () => startNavigation(p.name, p.lat, p.lon);
+                div.querySelector('.delete-btn').onclick = (e) => {
+                    e.stopPropagation();
+                    const filtered = loadSavedPlaces().filter(sp => sp.name !== p.name);
+                    try { localStorage.setItem('savedPlaces', JSON.stringify(filtered)); } catch(e){}
+                    renderSavedPlaces();
+                };
+                ui.savedList.appendChild(div);
+            });
+        }
+        renderSavedPlaces();
+
+        // ─── SEARCH & GEOCODING ───────────────────────────────────────────────────
+        // Mehrere Endpunkte als Fallback bei CORS-Problemen (z.B. beim Öffnen als lokale Datei)
+        const NOMINATIM_ENDPOINTS = [
+            'https://nominatim.openstreetmap.org',
+            'https://nominatim.maps.earth',    // alternativer öffentlicher Mirror
+        ];
+
+        async function geocode(q) {
+            const path = `/search?format=json&q=${encodeURIComponent(q)}&limit=5&addressdetails=1`;
+            let lastError;
+
+            for (const base of NOMINATIM_ENDPOINTS) {
+                try {
+                    const res = await fetch(base + path, {
+                        headers: { 'Accept-Language': 'de' },
+                        mode: 'cors'
+                    });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    return await res.json();
+                } catch (e) {
+                    lastError = e;
+                }
+            }
+
+            // Alle Endpunkte fehlgeschlagen → Photon als letzter Fallback (hat keine CORS-Beschränkung)
+            try {
+                const res = await fetch(
+                    `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=5&lang=de`,
+                    { mode: 'cors' }
+                );
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const geo = await res.json();
+                // Photon gibt GeoJSON zurück → in Nominatim-Format umwandeln
+                return geo.features.map(f => ({
+                    lat: f.geometry.coordinates[1],
+                    lon: f.geometry.coordinates[0],
+                    name: f.properties.name || f.properties.city || '',
+                    display_name: [
+                        f.properties.name,
+                        f.properties.street,
+                        f.properties.city,
+                        f.properties.state,
+                        f.properties.country
+                    ].filter(Boolean).join(', ')
+                }));
+            } catch (e) {
+                throw new Error("Suche fehlgeschlagen. Bitte Internetverbindung prüfen.");
+            }
+        }
+
+        async function doSearch() {
+            const q = ui.searchInput.value.trim();
+            if (!q) return;
+            ui.statusBar.textContent = "Suche läuft...";
+            ui.resultsList.innerHTML = "";
+
+            try {
+                const data = await geocode(q);
+
+                if (data.length === 0) {
+                    ui.statusBar.textContent = "Keine Ergebnisse gefunden.";
+                    return;
+                }
+                ui.statusBar.textContent = "";
+
+                data.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'list-item';
+                    const name = item.name || item.display_name.split(',')[0];
+                    div.innerHTML = `
+                        <div class="info">
+                            <div class="name">${escHtml(name)}</div>
+                            <div class="address">${escHtml(item.display_name)}</div>
+                        </div>`;
+                    div.onclick = () => startNavigation(name, parseFloat(item.lat), parseFloat(item.lon));
+                    ui.resultsList.appendChild(div);
+                });
+            } catch (e) {
+                ui.statusBar.textContent = e.message;
+            }
+        }
+
+        ui.searchBtn.onclick = doSearch;
+        ui.searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+        // ─── GPS HANDLING ─────────────────────────────────────────────────────────
+        function stopGps() {
+            if (state.watchId !== null) {
+                navigator.geolocation.clearWatch(state.watchId);
+                state.watchId = null;
+            }
+        }
+
+        function showGpsError(code, message) {
+            stopGps();
+            showScreen('gpsError');
+
+            // Spezifische Fehlermeldungen je nach Code
+            const messages = {
+                1: "Du hast den Standortzugriff abgelehnt. Bitte erlaube den Zugriff in den Browser-Einstellungen und versuche es erneut.",
+                2: "Der Standort konnte nicht ermittelt werden. Bist du drinnen? Geh kurz nach draußen oder aktiviere WLAN.",
+                3: "Die GPS-Ermittlung hat zu lange gedauert. Bitte versuche es nochmal."
+            };
+            ui.gpsErrorMsg.textContent = messages[code] || (message || "Ein unbekannter Fehler ist aufgetreten.");
+
+            // Plattformspezifischen Hinweis anpassen
+            if (code === 1) {
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                const isAndroid = /Android/.test(navigator.userAgent);
+                if (isIOS) {
+                    ui.gpsErrorHint.innerHTML = `<strong>So aktivierst du den Standort auf iOS:</strong><br>
+                        1. Einstellungen → Datenschutz → Ortungsdienste → An<br>
+                        2. Einstellungen → Safari → Ortung → Fragen oder Erlauben<br>
+                        3. Diese Seite neu laden`;
+                } else if (isAndroid) {
+                    ui.gpsErrorHint.innerHTML = `<strong>So aktivierst du den Standort auf Android:</strong><br>
+                        1. Das 🔒-Symbol links in der Adressleiste antippen<br>
+                        2. Standort → Erlauben<br>
+                        3. Dann auf "Nochmal versuchen" tippen`;
+                } else {
+                    ui.gpsErrorHint.innerHTML = `<strong>So aktivierst du den Standort:</strong><br>
+                        • Das 🔒-Symbol in der Adressleiste antippen<br>
+                        • Standort auf "Erlauben" setzen<br>
+                        • Dann auf "Nochmal versuchen" klicken`;
+                }
+            } else {
+                ui.gpsErrorHint.innerHTML = '';
+            }
+        }
+
+        function beginWatching() {
+            const options = { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 };
+            state.watchId = navigator.geolocation.watchPosition(
+                (pos) => {
+                    ui.gpsLoading.classList.add('hidden');
+                    state.currentLoc = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+                    ui.gpsDot.classList.add('active');
+                    ui.gpsText.textContent = `GPS aktiv (±${Math.round(pos.coords.accuracy)}m)`;
+                    updateNavigation();
+                },
+                (err) => {
+                    if (screens.nav.style.display !== 'none') showGpsError(err.code, err.message);
+                },
+                options
+            );
+        }
+
+        async function startGpsWatch() {
+            if (!navigator.geolocation) {
+                showGpsError(0, "Dein Browser unterstützt kein GPS.");
+                return;
+            }
+
+            ui.gpsLoading.classList.remove('hidden');
+
+            // Schritt 1: Permissions API prüfen falls verfügbar (Android Chrome, Desktop)
+            if (navigator.permissions) {
+                try {
+                    const status = await navigator.permissions.query({ name: 'geolocation' });
+                    if (status.state === 'denied') {
+                        // Dauerhaft blockiert — Browser zeigt nie wieder einen Dialog
+                        showGpsError(1, "Standort wurde dauerhaft blockiert.");
+                        return;
+                    }
+                } catch (e) { /* iOS Safari kennt die Permissions API nicht */ }
+            }
+
+            // Schritt 2: getCurrentPosition als expliziter Permission-Trigger
+            // → löst auf iOS und Android zuverlässig den nativen "Erlauben"-Dialog aus.
+            // watchPosition alleine tut das manchmal NICHT wenn die Seite als Datei geöffnet wird.
+            navigator.geolocation.getCurrentPosition(
+                (_pos) => {
+                    // Berechtigung erteilt → jetzt dauerhaft überwachen
+                    beginWatching();
+                },
+                (err) => {
+                    showGpsError(err.code, err.message);
+                },
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+            );
+        }
+
+        // ─── NAVIGATION ───────────────────────────────────────────────────────────
+        function startNavigation(name, lat, lon) {
+            state.target = { name, lat, lon };
+            state.currentLoc = null;
+            state.heading = 0;
+            state.lastRenderedRotation = 0;
+
+            ui.navTargetName.textContent = name;
+            ui.distValue.textContent = '--';
+            ui.distUnit.textContent = 'km';
+            ui.gpsDot.classList.remove('active');
+            ui.gpsText.textContent = 'Warte auf GPS...';
+            ui.targetReached.classList.remove('visible');
+            ui.menuSaveTarget.style.display = 'block';
+
+            showScreen('nav');
+            startGpsWatch();
+
+            // DeviceOrientation für Kompassrichtung
+            if (typeof DeviceOrientationEvent !== 'undefined' &&
+                typeof DeviceOrientationEvent.requestPermission === 'function') {
+                // iOS 13+ braucht explizite Erlaubnis
+                DeviceOrientationEvent.requestPermission()
+                    .then(state => {
+                        if (state === 'granted') {
+                            window.addEventListener('deviceorientation', onDeviceOrientation, true);
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                window.addEventListener('deviceorientation', onDeviceOrientation, true);
+            }
+        }
+
+        function onDeviceOrientation(e) {
+            // alpha = Kompassrichtung (auf manchen Geräten webkitCompassHeading genauer)
+            if (e.webkitCompassHeading !== undefined) {
+                state.heading = e.webkitCompassHeading;
+            } else if (e.alpha !== null) {
+                state.heading = 360 - e.alpha;
+            }
+            updateNavigation();
+        }
+
+        function updateNavigation() {
+            if (!state.currentLoc || !state.target) return;
+
+            const dist = getDistance(state.currentLoc.lat, state.currentLoc.lon, state.target.lat, state.target.lon);
+            const bearing = getBearing(state.currentLoc.lat, state.currentLoc.lon, state.target.lat, state.target.lon);
+
+            // Distanz anzeigen
+            if (dist < 1) {
+                ui.distValue.textContent = Math.round(dist * 1000);
+                ui.distUnit.textContent = 'm';
+            } else {
+                ui.distValue.textContent = dist.toFixed(1);
+                ui.distUnit.textContent = 'km';
+            }
+
+            // Ziel erreicht?
+            ui.targetReached.classList.toggle('visible', dist < 0.05);
+
+            // Pfeilrotation: Bearing relativ zur aktuellen Geräteausrichtung
+            const targetRotation = bearing - state.heading;
+
+            // Kürzesten Rotationsweg berechnen (verhindert 359° → 0° Sprung)
+            let diff = targetRotation - state.lastRenderedRotation;
+            while (diff > 180)  diff -= 360;
+            while (diff < -180) diff += 360;
+            state.lastRenderedRotation += diff;
+
+            ui.arrow.style.transform = `rotate(${state.lastRenderedRotation}deg)`;
+        }
+
+        function stopNavigation() {
+            stopGps();
+            window.removeEventListener('deviceorientation', onDeviceOrientation, true);
+            state.target = null;
+            state.currentLoc = null;
+            ui.menuSaveTarget.style.display = 'none';
+        }
+
+        // ─── MENU ─────────────────────────────────────────────────────────────────
+        ui.menuBtn.onclick = (e) => {
+            e.stopPropagation();
+            ui.menuPanel.classList.toggle('open');
+        };
+        document.addEventListener('click', () => ui.menuPanel.classList.remove('open'));
+
+        ui.menuNewSearch.onclick = () => {
+            stopNavigation();
+            showScreen('search');
+            ui.menuPanel.classList.remove('open');
+        };
+
+        ui.menuToggleTheme.onclick = () => {
+            const isLight = document.documentElement.classList.contains('light-mode');
+            applyTheme(isLight ? 'dark' : 'light');
+            ui.menuPanel.classList.remove('open');
+        };
+
+        ui.menuSaveTarget.onclick = () => {
+            if (!state.target) return;
+            ui.saveNameInput.value = state.target.name;
+            ui.modalOverlay.style.display = 'flex';
+            ui.menuPanel.classList.remove('open');
+            setTimeout(() => ui.saveNameInput.focus(), 100);
+        };
+
+        // ─── SAVE MODAL ───────────────────────────────────────────────────────────
+        ui.saveCancel.onclick = () => { ui.modalOverlay.style.display = 'none'; };
+        ui.saveConfirm.onclick = () => {
+            const name = ui.saveNameInput.value.trim();
+            if (!name || !state.target) return;
+            const places = loadSavedPlaces().filter(p => p.name !== name);
+            places.unshift({ name, lat: state.target.lat, lon: state.target.lon });
+            try { localStorage.setItem('savedPlaces', JSON.stringify(places)); } catch(e){}
+            ui.modalOverlay.style.display = 'none';
+        };
+        ui.saveNameInput.addEventListener('keydown', e => { if (e.key === 'Enter') ui.saveConfirm.click(); });
+
+        // ─── GPS ERROR SCREEN ─────────────────────────────────────────────────────
+        ui.retryGpsBtn.onclick = () => {
+            if (!state.target) { showScreen('search'); return; }
+            showScreen('nav');
+            ui.gpsLoading.classList.remove('hidden');
+            startGpsWatch();
+        };
+
+        ui.backToSearch.onclick = () => {
+            stopNavigation();
+            showScreen('search');
+            renderSavedPlaces();
+        };
+
+        // ─── INIT ─────────────────────────────────────────────────────────────────
+        showScreen('search');
+    </script>
+</body>
+</html>
